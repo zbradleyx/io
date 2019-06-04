@@ -1,0 +1,21 @@
+Grass
+Dirt (grass)
+Stone (grass)
+Hole (grass)
+Hole (grass)
+
+
+Fence
+Dirt
+Grass (dirt)
+Stone (dirt)
+Hole (dirt)
+Hole (dirt)
+
+
+
+Wood floor
+Stone floor
+Rug
+Hole (stone)
+Hole (stone)

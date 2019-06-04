@@ -1,0 +1,12 @@
+Stone
+Brick
+Cliff edge (dirt)
+Cliff edge (grass)
+
+
+
+
+Stone
+Brick
+Cliff (dirt)
+Cliff (grass)

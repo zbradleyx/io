@@ -1,0 +1,28 @@
+
+Bed
+Throne
+Statue
+Well
+Stairs (up)
+Stairs (down)
+Castle
+Sleeping mat
+Bed
+Table
+Dresser
+Pillar
+Dirt/Hill
+Mountain
+Town
+Flowers
+Rocks
+Pine tree
+Mine entrance
+Tomb entrance
+Hedge
+
+
+Plant
+Sign
+Tree
+Pot
