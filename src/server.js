@@ -4,6 +4,8 @@ var server = require('http').Server(app);
 var io = require('socket.io').listen(server);
 
 var players = {};
+var groundItems = {};
+var itemAmt = 0;
 var star = {
   x: Math.floor(Math.random() * 700) + 50,
   y: Math.floor(Math.random() * 500) + 50
@@ -31,6 +33,7 @@ io.on('connection', function (socket) {
   };
   // send the players object to the new player
   socket.emit('currentPlayers', players);
+  socket.emit('currentItems', groundItems);
   // send the star object to the new player
   socket.emit('starLocation', star);
   // send the current scores
@@ -55,12 +58,32 @@ io.on('connection', function (socket) {
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
+  socket.on('addGroundItem', function (itemData) {
+    groundItems[itemAmt] = { 
+      x: itemData.x,
+      y: itemData.y,
+      type: itemData.type
+    }
+    groundItems[itemAmt].itemId = itemAmt;
+    io.emit('itemAdded', groundItems[itemAmt]);
+    itemAmt++;
+  });
+
+
   socket.on('starCollected', function () {
     if (players[socket.id].team === 'red') {
       scores.red += 10;
     } else {
       scores.blue += 10;
     }
+    groundItems[itemAmt] = { 
+      x: star.x+10,
+      y: star.y+10,
+      type: 'log'
+    }
+    groundItems[itemAmt].itemId = itemAmt;
+    io.emit('itemAdded', groundItems[itemAmt]);
+    itemAmt++;
     star.x = Math.floor(Math.random() * 700) + 50;
     star.y = Math.floor(Math.random() * 500) + 50;
     io.emit('starLocation', star);

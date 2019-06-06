@@ -19,6 +19,10 @@ class SceneA extends Phaser.Scene {
       this.load.image('star', 'assets/rpg-pack/props/generic-rpg-tree01.png');
       this.load.image("terrain", "assets/tiny16/Tilesets/A2.png");
       this.load.image("stuff", "assets/tiny16/Tilesets/B.png");
+      this.load.image("log", "assets/icons/log.png");
+
+      this.load.audio('loginMusic', "assets/audio/login_music.mp3");
+      this.load.audio('ingameMusic', "assets/audio/ingame_music.mp3");
 
       this.load.tilemapTiledJSON('realmap', 'assets/maps/realmap.json');
 
@@ -30,18 +34,27 @@ class SceneA extends Phaser.Scene {
       this.socket = io();
       this.otherPlayers = this.physics.add.group();
       this.myself = this.physics.add.group();
+      this.groundItems = this.physics.add.group();
 
       this.socket.on('currentPlayers', function(players) {
           Object.keys(players).forEach(function(id) {
               if (players[id].playerId === self.socket.id) {
-                  addPlayer(self, players[id]);
+                  self.addPlayer(self, players[id]);
               } else {
-                  addOtherPlayers(self, players[id]);
+                  self.addOtherPlayers(self, players[id]);
               }
           });
       });
+      this.socket.on('currentItems', function(groundItems) {
+        Object.keys(groundItems).forEach(function(id) {
+            self.addGroundItem(self, groundItems[id]);
+        });
+      });
       this.socket.on('newPlayer', function(playerInfo) {
-          addOtherPlayers(self, playerInfo);
+          self.addOtherPlayers(self, playerInfo);
+      });
+      this.socket.on('itemAdded', function(itemInfo) {
+        self.addGroundItem(self, itemInfo);
       });
       this.socket.on('disconnect', function(playerId) {
           self.otherPlayers.getChildren().forEach(function(otherPlayer) {
@@ -53,13 +66,28 @@ class SceneA extends Phaser.Scene {
       this.socket.on('playerMoved', function(playerInfo) {
           self.otherPlayers.getChildren().forEach(function(otherPlayer) {
               if (playerInfo.playerId === otherPlayer.playerId) {
+                if (otherPlayer.y > playerInfo.y) {
+                    otherPlayer.anims.play("up", true);
+                } else if (otherPlayer.y < playerInfo.y) {
+                    otherPlayer.anims.play("down", true);
+                } else if (otherPlayer.x > playerInfo.x) {
+                    otherPlayer.anims.play("left", true);
+                } else if (otherPlayer.x < playerInfo.x) {
+                    otherPlayer.anims.play("right", true);
+                } /*else if (prevVelocity.x < 0) this.ship.anims.play("standLeft", true);
+                else if (prevVelocity.x > 0) this.ship.anims.play("standRight", true);
+                else if (prevVelocity.y < 0) this.ship.anims.play("standUp", true);
+                else if (prevVelocity.y > 0) this.ship.anims.play("standDown", true);
+                else this.ship.anims.stop();*/
                   otherPlayer.setPosition(playerInfo.x, playerInfo.y);
               }
           });
       });
       this.cursors = this.input.keyboard.createCursorKeys();
 
-      /*this.blueScoreText = this.add.text(16, 16, '', {
+      this.keyboard = this.input.keyboard.addKeys("W, A, S, D");
+
+      this.blueScoreText = this.add.text(16, 16, '', {
           fontSize: '32px',
           fill: '#0000FF'
       });
@@ -73,13 +101,23 @@ class SceneA extends Phaser.Scene {
           self.redScoreText.setText('Red: ' + scores.red);
       });
 
+      newCircle = this.physics.add.sprite(-100, -100, 'circle');
+      newCircle.visible = false;
+
       this.socket.on('starLocation', function(starLocation) {
-          if (self.star) self.star.destroy();
-          self.star = self.physics.add.image(starLocation.x, starLocation.y, 'star');
-          self.physics.add.overlap(self.ship, self.star, function() {
-              this.socket.emit('starCollected');
-          }, null, self);
-      });*/
+            if (self.star) {
+                /*this.socket.emit('addGroundItem', {
+                    x: self.star.x,
+                    y: self.star.y,
+                    type: 'log'
+                });*/
+                self.star.destroy();
+            }
+            self.star = self.physics.add.image(starLocation.x, starLocation.y, 'star');
+            self.physics.add.overlap(newCircle, self.star, function() {
+                this.socket.emit('starCollected');
+            }, null, self);
+      });
 
       var realmap = this.add.tilemap("realmap");
 
@@ -101,12 +139,13 @@ class SceneA extends Phaser.Scene {
           collides: true
       });
 
+      let loginMusic = this.sound.add('loginMusic');
+      //loginMusic.play();
+
       this.anims.create({
           key: 'down',
           frames: this.anims.generateFrameNumbers("player", {
-              start: 0,
-              end: 2,
-              first: 2
+              frames: [0,1,2,1]
           }),
           frameRate: 10,
           repeat: -1
@@ -124,9 +163,7 @@ class SceneA extends Phaser.Scene {
       this.anims.create({
           key: 'left',
           frames: this.anims.generateFrameNumbers("player", {
-              start: 12,
-              end: 14,
-              first: 14
+              frames: [12,13,14,13]
           }),
           frameRate: 10,
           repeat: -1
@@ -144,9 +181,7 @@ class SceneA extends Phaser.Scene {
       this.anims.create({
           key: 'right',
           frames: this.anims.generateFrameNumbers("player", {
-              start: 24,
-              end: 26,
-              first: 26
+              frames: [24,25,26,25]
           }),
           frameRate: 10,
           repeat: -1
@@ -164,9 +199,7 @@ class SceneA extends Phaser.Scene {
       this.anims.create({
           key: 'up',
           frames: this.anims.generateFrameNumbers("player", {
-              start: 36,
-              end: 38,
-              first: 38
+              frames: [36,37,38,37]
           }),
           frameRate: 10,
           repeat: -1
@@ -216,20 +249,24 @@ class SceneA extends Phaser.Scene {
   }
 
   addOtherPlayers(self, playerInfo) {
-      const otherPlayer = self.add.sprite(playerInfo.x, playerInfo.y, 'otherPlayer');
+      const otherPlayer = self.add.sprite(playerInfo.x, playerInfo.y, 'player');
       /*if (playerInfo.team === 'blue') {
         otherPlayer.setTint(0x0000ff);
       } else {
         otherPlayer.setTint(0xff0000);
       }*/
+      otherPlayer.anims.play("standDown", true);
       otherPlayer.playerId = playerInfo.playerId;
       self.otherPlayers.add(otherPlayer);
   }
 
-  update() {
+  addGroundItem(self, itemInfo) {
+    const groundItem = self.physics.add.sprite(itemInfo.x, itemInfo.y, itemInfo.type);
+    groundItem.itemId = itemInfo.itemId;
+    self.groundItems.add(groundItem);
+  }
 
-      var isBusy = false;
-      var newCircle;
+  update() {
 
       if (this.ship) {
 
@@ -237,17 +274,17 @@ class SceneA extends Phaser.Scene {
           const prevVelocity = this.ship.body.velocity.clone();
 
           if (!isBusy) {
-              if (this.cursors.left.isDown) {
+              if (this.cursors.left.isDown || this.keyboard.A.isDown === true) {
                   this.ship.setVelocityX(-speed);
-              } else if (this.cursors.right.isDown) {
+              } else if (this.cursors.right.isDown || this.keyboard.D.isDown === true) {
                   this.ship.setVelocityX(speed);
               } else {
                   this.ship.setVelocityX(0);
               }
 
-              if (this.cursors.up.isDown) {
+              if (this.cursors.up.isDown || this.keyboard.W.isDown === true) {
                   this.ship.setVelocityY(-speed);
-              } else if (this.cursors.down.isDown) {
+              } else if (this.cursors.down.isDown || this.keyboard.S.isDown === true) {
                   this.ship.setVelocityY(speed);
               } else {
                   this.ship.setVelocityY(0);
@@ -260,9 +297,9 @@ class SceneA extends Phaser.Scene {
           this.input.keyboard.on("keydown-F", () => {
               this.ship.anims.play("spin", true);
               isBusy = true;
-              if (!newCircle)
-                  newCircle = this.add.sprite(this.ship.x, this.ship.y, 'circle');
-              else {
+              if (!newCircle) {
+                  newCircle = this.physics.add.sprite(this.ship.x, this.ship.y, 'circle');
+              } else {
                   newCircle.x = this.ship.x;
                   newCircle.y = this.ship.y;
               }
@@ -274,16 +311,36 @@ class SceneA extends Phaser.Scene {
               this.ship.anims.stop();
               isBusy = false;
               newCircle.visible = false;
+              newCircle.x = -100;
+              newCircle.y = -100;
               newCircle.anims.stop();
           });
 
-          if (isBusy) {} else if (this.cursors.up.isDown) {
+          this.input.keyboard.on("keydown-E", () => {
+            if (!isBusy && carrying == -1) {
+                this.groundItems.getChildren().forEach(function(id) {
+                    this.physics.add.overlap(this.groundItems[id], this.ship, function() {
+                        carrying = id;
+                    }, null, self);
+                });
+            } else
+                carrying = -1;
+          });
+
+          if (!carryItem && carrying > -1)
+            carryItem = this.physics.add.sprite(this.ship.x, this.ship.y-15, 'log');
+          else if (carryItem) {
+            carryItem.x = this.ship.x;
+            carryItem.y = this.ship.y-15;
+          }
+
+          if (isBusy) {} else if (this.cursors.up.isDown || this.keyboard.W.isDown === true) {
               this.ship.anims.play("up", true);
-          } else if (this.cursors.down.isDown) {
+          } else if (this.cursors.down.isDown || this.keyboard.S.isDown === true) {
               this.ship.anims.play("down", true);
-          } else if (this.cursors.left.isDown) {
+          } else if (this.cursors.left.isDown || this.keyboard.A.isDown === true) {
               this.ship.anims.play("left", true);
-          } else if (this.cursors.right.isDown) {
+          } else if (this.cursors.right.isDown || this.keyboard.D.isDown === true) {
               this.ship.anims.play("right", true);
           } else if (prevVelocity.x < 0) this.ship.anims.play("standLeft", true);
           else if (prevVelocity.x > 0) this.ship.anims.play("standRight", true);
@@ -314,6 +371,12 @@ class SceneA extends Phaser.Scene {
   }
 }
 
+var isBusy = false;
+var carrying = -1;
+var carryItem;
+var newCircle;
+//var groundItems;
+
 class SceneB extends Phaser.Scene {
 
   constructor() {
@@ -325,12 +388,28 @@ class SceneB extends Phaser.Scene {
       this.score = 0;
   }
 
+  preload() {
+    this.load.image("sound", "assets/ui/button_sound_hover.png");
+    this.load.image("store", "assets/ui/button_store_hover.png");
+    this.load.image("settings", "assets/ui/button_setting_hover.png");
+    this.load.image("home", "assets/ui/button_home_hover.png");
+    this.load.image("empty", "assets/ui/button_empty.png");
+    this.load.image("popup", "assets/ui/pop_up.png");
+  }
+
   create() {
-      //  Our Text object to display the Score
+
+      let spellSlot = this.add.image(400, 36, 'empty').setDisplaySize(48,48).setAlpha(0.85);
+
       let info = this.add.text(10, 10, 'Score: 0', {
-          font: '48px Arial',
-          fill: '#000000'
-      });
+        font: '48px Arial',
+        fill: '#000000'
+        });
+
+      let press1 = this.add.text(398, 40, '1', {
+        font: '12px Times New Roman',
+        fill: '#000000'
+        });
 
       //  Grab a reference to the Game Scene
       let ourGame = this.scene.get('GameScene');
